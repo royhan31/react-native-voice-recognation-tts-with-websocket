@@ -29,33 +29,31 @@ class App extends Component {
     text: '',
     tools: [],
     lamp: "",
-    pump: "",
+    lampText:"",
     colorLamp: "",
-    colorPump: ""
   };
 
   constructor(props) {
     super(props);
-    var socket = this.socket = io('http://plug-plant.herokuapp.com');
+    var socket = this.socket = io('https://plug-plant.herokuapp.com/');
     socket.on("all tools", snap => {
+      console.log(snap);
         this.setState({
-            tools: snap,
+            lamp: snap.lamp,
         });
-        this.state.tools.map((item) => {
-            if (item.lamp) {
+            if (snap.lamp) {
               this.setState({
-                lamp: "OFF",
+                lampText: "OFF",
                 colorLamp: "red",
                 text: "lampu mati"
               })
             }else {
               this.setState({
-                lamp: "ON",
+                lampText: "ON",
                 colorLamp: "blue",
                 text: "lampu menyala"
               })
             }
-          })
     });
     //Setting callbacks for the process status
     Voice.onSpeechPartialResults = this.onSpeechPartialResults;
@@ -84,8 +82,7 @@ class App extends Component {
       Tts.addEventListener('tts-start', event =>
         this.setState({ ttsStatus: 'started' })
       );
-      this.state.tools.map((item) => {
-        if (item.lamp) {
+        if (this.state.lamp) {
           this.setState({
             text: "lampu sudah menyala",
           });
@@ -95,7 +92,6 @@ class App extends Component {
           });
         this.socket.emit('update sensor', {lamp: true})
         }
-    })
     Tts.stop();
     Tts.speak(this.state.text);
     Tts.addEventListener('tts-start', event =>
@@ -107,8 +103,7 @@ class App extends Component {
     Tts.addEventListener('tts-start', event =>
       this.setState({ ttsStatus: 'started' })
     );
-      this.state.tools.map((item) => {
-        if (!item.lamp) {
+        if (!this.state.lamp) {
           this.setState({
             text: "lampu sudah mati",
           });
@@ -118,7 +113,6 @@ class App extends Component {
           });
         this.socket.emit('update sensor', {lamp: false})
         }
-      })
       Tts.stop();
       Tts.speak(this.state.text);
       Tts.addEventListener('tts-start', event =>
@@ -129,23 +123,21 @@ class App extends Component {
 
   btnLamp = async () => {
     await this._destroyRecognizer();
-    this.state.tools.map((item) => {
-        if (item.lamp) {
+        if (this.state.lamp) {
           this.setState({
-            lamp: "OFF",
-            color: "red",
+            lampText: "OFF",
+            colorLamp: "red",
             text: "lampu mati"
           })
           this.socket.emit('update sensor', {lamp: false})
         }else {
           this.setState({
-            lamp: "ON",
-            color: "blue",
+            lampText: "ON",
+            colorLamp: "blue",
             text: "lampu menyala"
           })
           this.socket.emit('update sensor', {lamp: true})
         }
-      })
       Tts.stop();
       Tts.speak(this.state.text);
       this.setState({ ttsStatus: 'finished' })
@@ -229,7 +221,7 @@ class App extends Component {
              style={{backgroundColor : this.state.colorLamp, paddingHorizontal: 30,paddingVertical: 5, borderRadius: 30, margin: 5}}
              onPress={this.btnLamp}
            >
-             <Text style={styles.customBtnText}>{this.state.lamp}</Text>
+             <Text style={styles.customBtnText}>{this.state.lampText}</Text>
            </TouchableOpacity>
 
           <Text style={styles.instructions}>
