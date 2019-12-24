@@ -14,14 +14,19 @@ import Voice from 'react-native-voice';
 import Slider from '@react-native-community/slider';
 import Tts from 'react-native-tts';
 import io from 'socket.io-client/dist/socket.io';
+import { Dialogflow_V2 } from 'react-native-dialogflow';
+import { dialogflowConfig } from './env';
+
+// const BOT_USER = {
+//   _id: 2
+// };
 
 class App extends Component {
   state = {
     pitch: '',
     end: '',
     started: '',
-    partialResults: '',
-    voices: [],
+    results: '',
     ttsStatus: 'initiliazing',
     selectedVoice: 'id-ID-language',
     speechRate: 0.5,
@@ -35,9 +40,18 @@ class App extends Component {
 
   constructor(props) {
     super(props);
+    Dialogflow_V2.setConfiguration(
+      dialogflowConfig.client_email,
+      dialogflowConfig.private_key,
+      Dialogflow_V2.LANG_ENGLISH_US,
+      dialogflowConfig.project_id
+    );
+    Voice._startRecognizing = this._stopRecognizing.bind(this)
+    Voice.onSpeechResults = this.onSpeechResults.bind(this)
+    Voice.onSpeechEnd = this.onSpeechEnd.bind(this)
+
     var socket = this.socket = io('https://plug-plant.herokuapp.com/');
     socket.on("all tools", snap => {
-      console.log(snap);
         this.setState({
             lamp: snap.lamp,
         });
@@ -54,72 +68,76 @@ class App extends Component {
                 text: "lampu menyala"
               })
             }
-    });
-    //Setting callbacks for the process status
-    Voice.onSpeechPartialResults = this.onSpeechPartialResults;
-    Tts.addEventListener('tts-start', event =>
-      this.setState({ ttsStatus: 'started' })
-    );
-    Tts.addEventListener('tts-finish', event =>
-      this.setState({ ttsStatus: 'finished' })
-    );
-    Tts.addEventListener('tts-cancel', event =>
-      this.setState({ ttsStatus: 'cancelled' })
-    );
+          });
   }
 
-  // componentWillUnmount() {
-  //   //destroy the process after switching the screen
-  //   Voice.destroy().then(Voice.removeAllListeners);
-  // }
-
-  onSpeechPartialResults = e => {
+  onSpeechResults = e => {
     this.setState({
-      partialResults: e.value,
+      results: e.value[0].toLowerCase(),
+    }, () => {
+      Voice.stop()
     });
+    this.onSend(this.state.results)
+  };
 
-    if (this.state.partialResults[0].toLowerCase() === "nyalakan lampu") {
-      Tts.addEventListener('tts-start', event =>
-        this.setState({ ttsStatus: 'started' })
-      );
-        if (this.state.lamp) {
-          this.setState({
-            text: "lampu sudah menyala",
-          });
-        }else {
-          this.setState({
-            text: "lampu menyala",
-          });
-        this.socket.emit('update sensor', {lamp: true})
-        }
-    Tts.stop();
-    Tts.speak(this.state.text);
-    Tts.addEventListener('tts-start', event =>
-      this.setState({ ttsStatus: 'finished' })
+  onSpeechEnd = e => {
+    //Invoked when SpeechRecognizer stops recognition
+    console.log('onSpeechEnd: ', e);
+    this.setState({
+      end: '√',
+    });
+  };
+
+  onSend(messages) {
+    Dialogflow_V2.requestQuery(
+      messages,
+      result => this.handleGoogleResponse(result),
+      error => console.log(error)
     );
   }
 
-  else if (this.state.partialResults[0].toLowerCase() === "matikan lampu") {
-    Tts.addEventListener('tts-start', event =>
-      this.setState({ ttsStatus: 'started' })
-    );
-        if (!this.state.lamp) {
+  handleGoogleResponse(result) {
+    let text = result.queryResult.fulfillmentMessages[0].text.text[0];
+    this.sendBotResponse(text);
+  }
+
+  sendBotResponse(text) {
+    if(text === "lampu menyala"){
+      if (this.state.lamp) {
+            this.setState({
+              text: "lampu sudah menyala",
+            });
+          }else {
+            this.setState({
+              text: text,
+            });
+          this.socket.emit('update sensor', {lamp: true})
+          }
+          Tts.stop();
+          Tts.speak(this.state.text);
+    }else if(text === "lampu mati") {
+      if (!this.state.lamp) {
           this.setState({
-            text: "lampu sudah mati",
+              text: "lampu sudah mati",
           });
-        }else {
-          this.setState({
-            text: "lampu mati",
-          });
-        this.socket.emit('update sensor', {lamp: false})
-        }
+              }else {
+                this.setState({
+                  text: text,
+                });
+              this.socket.emit('update sensor', {lamp: false})
+              }
       Tts.stop();
       Tts.speak(this.state.text);
-      Tts.addEventListener('tts-start', event =>
-        this.setState({ ttsStatus: 'finished' })
-      );
+    } else {
+      this.setState({
+        text: text,
+      });
+      Tts.stop();
+      Tts.speak(this.state.text);
     }
-  };
+  }
+
+
 
   btnLamp = async () => {
     await this._destroyRecognizer();
@@ -149,7 +167,7 @@ class App extends Component {
     this.setState({
       pitch: '',
       started: '',
-      partialResults: '',
+      results: '',
       end: '',
     });
 
@@ -181,13 +199,6 @@ class App extends Component {
     }
   };
 
-  onSpeechVolumeChanged = () => {
-   //Invoked when pitch that is recognized changed
-   this.setState({
-     pitch: 100,
-   });
- };
-
   _destroyRecognizer = async () => {
     //Destroys the current SpeechRecognizer instance
     try {
@@ -199,7 +210,7 @@ class App extends Component {
     this.setState({
       pitch: '',
       started: '',
-      partialResults: '',
+      results: '',
       end: '',
       text:''
     });
@@ -257,7 +268,7 @@ class App extends Component {
               fontWeight: '700',
             }
           }>
-          {this.state.partialResults}
+          {this.state.results}
           </Text>
           <View
             style={{
